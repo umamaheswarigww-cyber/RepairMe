@@ -52,9 +52,24 @@ function imagePart(dataUrl) {
 function extractJson(raw) {
   if (!raw) return null;
   if (typeof raw !== 'string') return raw;
-  const trimmed = raw.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const candidate = fenced ? fenced[1].trim() : trimmed;
+
+  let candidate = raw.trim();
+  // Strip <think> reasoning tokens from reasoning models
+  candidate = candidate.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // Extract content between markdown code fences if present
+  const fenced = candidate.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) {
+    candidate = fenced[1].trim();
+  }
+
+  // Extract first '{' to last '}' to handle any conversational text
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    candidate = candidate.slice(start, end + 1);
+  }
+
   return JSON.parse(candidate);
 }
 
@@ -190,7 +205,7 @@ Important:
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.PUBLIC_APP_URL || 'http://localhost:5173',
+        'HTTP-Referer': process.env.PUBLIC_APP_URL || 'https://repair-me-psi.vercel.app',
         'X-OpenRouter-Title': 'RepairMe',
       },
       body: JSON.stringify({
