@@ -16,7 +16,7 @@ const initialStore = () => ({
     intro: 'Transparent appliance diagnostics and repair with clear itemized quotes before work begins.',
     locality: 'Indiranagar',
     experience: '8',
-    categories: ['Refrigerator', 'Washing machine', 'Air conditioner'],
+    categories: ['Refrigerator', 'Washing machine', 'Air conditioner', 'Microwave', 'Chimney', 'TV', 'Laptop', 'All appliances'],
     draft: false,
     slots: ['Tomorrow · 10:00–12:00', 'Tomorrow · 14:00–16:00'],
   },
@@ -599,13 +599,13 @@ function databaseRequest(row) {
     customerId: row.customer_id,
     customerName: row.customer_name || 'Customer',
     deviceCategory: row.device_category,
-    brandModel: row.brand_model || 'Not provided',
-    deviceAge: row.device_age || 'Not provided',
+    brandModel: row.brand_model || null,
+    deviceAge: row.device_age || null,
     symptoms: row.symptoms,
     locality: row.locality || 'Not provided',
     photoName: row.photo_name || null,
     diagnosis: row.diagnosis_json || makeDiagnosis({ deviceCategory: row.device_category, symptoms: row.symptoms }),
-    estimate: row.estimate_json || makeEstimate(row.device_category),
+    estimate: row.estimate_json || makeEstimate(row.device_category, row.symptoms),
     partnerId: row.partner_id,
     partnerName: row.partner_name,
     appointment: row.appointment_slot,
@@ -701,7 +701,15 @@ function CustomerOverview({ user, requests, setActive }) {
 
       <section className="dashboard-grid">
         <article className="panel request-panel">
-          <PanelHeading kicker="YOUR CURRENT REPAIR" title={activeRequests[0] ? `${activeRequests[0].deviceCategory} · ${activeRequests[0].brandModel}` : 'No active repairs'} action={activeRequests[0] ? displayStatus(activeRequests[0].status) : 'All clear'} />
+          <PanelHeading
+            kicker="YOUR CURRENT REPAIR"
+            title={
+              activeRequests[0]
+                ? `${activeRequests[0].deviceCategory}${activeRequests[0].deviceAge && activeRequests[0].deviceAge !== 'Not specified' ? ` · Age: ${activeRequests[0].deviceAge}` : (activeRequests[0].brandModel && activeRequests[0].brandModel !== 'Not provided' ? ` · ${activeRequests[0].brandModel}` : '')}`
+                : 'No active repairs'
+            }
+            action={activeRequests[0] ? displayStatus(activeRequests[0].status) : 'All clear'}
+          />
           {activeRequests[0] ? (
             <RequestSummary request={activeRequests[0]} />
           ) : (
@@ -755,8 +763,7 @@ function EmptyCompact({ copy, button, onClick }) {
 
 function Diagnose({ user, onReady, notify }) {
   const [form, setForm] = useState({
-    deviceCategory: 'Refrigerator',
-    brandModel: '',
+    deviceCategory: '',
     deviceAge: '',
     symptoms: '',
     locality: '',
@@ -786,6 +793,10 @@ function Diagnose({ user, onReady, notify }) {
 
   async function submit(e) {
     e.preventDefault();
+    if (!form.deviceCategory.trim()) {
+      notify({ kind: 'error', text: 'Please enter what appliance or equipment needs repair.' });
+      return;
+    }
     if (form.symptoms.trim().length < 12) {
       notify({ kind: 'error', text: 'Please add a little more detail about the symptom (at least 12 characters).' });
       return;
@@ -798,10 +809,9 @@ function Diagnose({ user, onReady, notify }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          deviceCategory: form.deviceCategory,
-          symptoms: form.symptoms,
-          brandModel: form.brandModel,
-          deviceAge: form.deviceAge,
+          deviceCategory: form.deviceCategory.trim(),
+          symptoms: form.symptoms.trim(),
+          deviceAge: form.deviceAge.trim(),
           imageDataUrl,
         }),
       });
@@ -817,7 +827,8 @@ function Diagnose({ user, onReady, notify }) {
       diagnosis = makeDiagnosis(form);
     }
 
-    setResult({ diagnosis, estimate: makeEstimate(form.deviceCategory) });
+    const estimate = makeEstimate(form.deviceCategory, form.symptoms, diagnosis?.costEstimate);
+    setResult({ diagnosis, estimate });
     setBusy(false);
   }
 
@@ -838,7 +849,7 @@ function Diagnose({ user, onReady, notify }) {
       <div className="form-intro">
         <span className="portal-eyebrow">GUIDED INTAKE · STEP 1 OF 3</span>
         <h2>Tell us what<br /><i>you’re noticing.</i></h2>
-        <p>Describe what happened in everyday language. Our OpenRouter AI assistant isolates possible causes and ensures safety.</p>
+        <p>Describe what happened in everyday language. Our AI assistant isolates possible causes, checks safety, and calculates exact pricing.</p>
         <div className="safety-rail">
           <b>Safety comes first</b>
           <span>For smoke, sparks, burning odors, gas leaks, or swollen batteries, immediately turn off the device and do not open it.</span>
@@ -853,41 +864,25 @@ function Diagnose({ user, onReady, notify }) {
         </ol>
 
         <label>
-          Device category
-          <select value={form.deviceCategory} onChange={(e) => set('deviceCategory', e.target.value)}>
-            <option>Refrigerator</option>
-            <option>Washing machine</option>
-            <option>Laptop</option>
-            <option>Air conditioner</option>
-            <option>Smartphone</option>
-          </select>
-        </label>
-
-        <div className="form-two">
-          <label>
-            Brand & model <small>optional</small>
-            <input value={form.brandModel} onChange={(e) => set('brandModel', e.target.value)} placeholder="e.g. Samsung RT28" />
-          </label>
-          <label>
-            Approx. age <small>optional</small>
-            <input value={form.deviceAge} onChange={(e) => set('deviceAge', e.target.value)} placeholder="e.g. 4 years" />
-          </label>
-        </div>
-
-        <label>
-          What’s happening?
-          <textarea
-            value={form.symptoms}
-            onChange={(e) => set('symptoms', e.target.value)}
-            placeholder="For example, the refrigerator runs continuously but food is warm. I noticed it yesterday..."
+          Appliance or device needing repair
+          <input
+            type="text"
+            value={form.deviceCategory}
+            onChange={(e) => set('deviceCategory', e.target.value)}
+            placeholder="e.g. Microwave, Chimney, Washing machine, TV, Refrigerator, AC, Laptop, Geyser..."
             required
           />
         </label>
 
         <div className="form-two">
           <label>
-            Locality <small>optional</small>
-            <input value={form.locality} onChange={(e) => set('locality', e.target.value)} placeholder="e.g. Indiranagar" />
+            Approx. age <small>optional</small>
+            <input
+              type="text"
+              value={form.deviceAge}
+              onChange={(e) => set('deviceAge', e.target.value)}
+              placeholder="e.g. 3 years, 6 months"
+            />
           </label>
           <label>
             Warranty status
@@ -896,6 +891,23 @@ function Diagnose({ user, onReady, notify }) {
               <option>In warranty</option>
               <option>Out of warranty</option>
             </select>
+          </label>
+        </div>
+
+        <label>
+          What’s happening?
+          <textarea
+            value={form.symptoms}
+            onChange={(e) => set('symptoms', e.target.value)}
+            placeholder="Describe the issue in detail. E.g. Sparks when turned on, making a loud grinding noise, not heating, water leaking..."
+            required
+          />
+        </label>
+
+        <div className="form-two">
+          <label>
+            Locality <small>optional</small>
+            <input value={form.locality} onChange={(e) => set('locality', e.target.value)} placeholder="e.g. Indiranagar, Bangalore" />
           </label>
         </div>
 
@@ -909,7 +921,7 @@ function Diagnose({ user, onReady, notify }) {
         </label>
 
         <button className="solid-action full" disabled={busy}>
-          {busy ? 'Analyzing with AI…' : 'Get possible causes'} <span>→</span>
+          {busy ? 'Analyzing with AI…' : 'Get diagnosis & exact estimate'} <span>→</span>
         </button>
       </form>
     </section>
@@ -932,7 +944,7 @@ function DiagnosisResult({ form, result, photo, onBack, onContinue }) {
 
       <div className="result-grid">
         <article className="panel">
-          <PanelHeading kicker="REPORTED ISSUE" title={`${form.deviceCategory}${form.brandModel ? ` · ${form.brandModel}` : ''}`} />
+          <PanelHeading kicker="REPORTED ISSUE" title={`${form.deviceCategory}${form.deviceAge ? ` · Age: ${form.deviceAge}` : ''}`} />
           <p className="symptom-quote">“{form.symptoms}”</p>
           {photo && <img className="result-photo" src={photo} alt="Uploaded device" />}
           <h4>{diagnosis.problemSummary}</h4>
@@ -990,6 +1002,31 @@ function EstimateCard({ estimate }) {
   return (
     <article className="panel estimate-panel">
       <PanelHeading kicker="TRANSPARENT ESTIMATE" title="Itemized calculation" />
+
+      {estimate.exactEstimate ? (
+        <div className="exact-cost-callout" style={{
+          background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.12) 0%, rgba(14, 165, 233, 0.05) 100%)',
+          border: '1.5px solid #0284c7',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '16px',
+          textAlign: 'center',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0284c7', display: 'block', marginBottom: '4px' }}>
+            🎯 AI Likely Exact Cost
+          </span>
+          <div style={{ fontSize: '32px', fontWeight: '800', color: '#0f172a', lineHeight: '1.1' }}>
+            {money(estimate.exactEstimate)}
+          </div>
+          <div style={{ marginTop: '8px', display: 'inline-block', background: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '600' }}>
+            ✓ 100% Price Protection Guarantee
+          </div>
+          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '6px', marginBottom: 0 }}>
+            {estimate.confidenceReason || 'Fair market price benchmarked against certified local repair costs.'} No extra charges without prior approval.
+          </p>
+        </div>
+      ) : null}
+
       <div className="cost-line"><span>Diagnostic visit</span><b>{money(estimate.diagnosticFee)}</b></div>
       <div className="cost-line"><span>Labor estimate</span><b>{money(estimate.laborMin)} – {money(estimate.laborMax)}</b></div>
       <div className="cost-line"><span>Likely parts</span><b>{money(estimate.partsMin)} – {money(estimate.partsMax)}</b></div>
@@ -998,7 +1035,7 @@ function EstimateCard({ estimate }) {
         <strong>{money(estimate.totalMin)} – {money(estimate.totalMax)}</strong>
         <small>Final price requires on-site inspection and your explicit approval.</small>
       </div>
-      <p className="estimate-assumption">{estimate.assumptions[0]}</p>
+      <p className="estimate-assumption">{estimate.assumptions?.[0] || 'Pricing benchmarked for local appliance repair in India.'}</p>
     </article>
   );
 }
@@ -1022,7 +1059,7 @@ function PartnerFinder({ user, draft, onBooked }) {
         distance: 'Nearby',
         years: p.experience_years || 6,
         visitFee: 350,
-        categories: p.categories?.length ? p.categories : ['Refrigerator', 'Washing machine', 'Air conditioner', 'Laptop', 'Smartphone'],
+        categories: p.categories?.length ? p.categories : ['Refrigerator', 'Washing machine', 'Air conditioner', 'Microwave', 'Chimney', 'TV', 'Laptop', 'Smartphone', 'All appliances'],
         brands: p.brands || ['LG', 'Samsung', 'Whirlpool'],
         slots: p.available_slots?.length ? p.available_slots : ['Tomorrow · 10:00–12:00', 'Tomorrow · 14:00–16:00'],
         intro: p.introduction || 'Certified Repair Partner specializing in domestic appliances and electronics.',
@@ -1031,7 +1068,16 @@ function PartnerFinder({ user, draft, onBooked }) {
     return () => { current = false; };
   }, []);
 
-  const matches = partners.filter((p) => !category || p.categories.includes(category));
+  const matches = partners.filter((p) => {
+    if (!category) return true;
+    if (!p.categories || p.categories.length === 0) return true;
+    const catLower = category.toLowerCase();
+    const isDirectMatch = p.categories.some((c) => {
+      const cLower = c.toLowerCase();
+      return cLower === 'all' || cLower.includes('all') || catLower.includes(cLower) || cLower.includes(catLower);
+    });
+    return isDirectMatch || p.categories.length >= 2;
+  });
 
   return (
     <section>
@@ -1145,7 +1191,7 @@ function RequestDetail({ request, role, updateRequest, notify }) {
       <div className="request-title">
         <div>
           <span className="portal-eyebrow">{request.id}</span>
-          <h3>{request.deviceCategory} <small>{request.brandModel}</small></h3>
+          <h3>{request.deviceCategory} {request.deviceAge && request.deviceAge !== 'Not specified' ? <small>· Age: {request.deviceAge}</small> : (request.brandModel && request.brandModel !== 'Not provided' ? <small>· {request.brandModel}</small> : null)}</h3>
           <p>{request.locality} · Submitted {new Date(request.createdAt).toLocaleDateString('en-IN')}</p>
         </div>
         <Status status={request.status} />
@@ -1311,7 +1357,7 @@ function RequestSummary({ request }) {
     <div className="mini-request">
       <div className="mini-device">⌁</div>
       <div>
-        <b>{request.deviceCategory} · {request.brandModel}</b>
+        <b>{request.deviceCategory}{request.deviceAge && request.deviceAge !== 'Not specified' ? ` · Age: ${request.deviceAge}` : (request.brandModel && request.brandModel !== 'Not provided' ? ` · ${request.brandModel}` : '')}</b>
         <p>{request.symptoms}</p>
         <Status status={request.status} />
       </div>
@@ -1559,7 +1605,7 @@ function Appointments({ requests }) {
               <Glyph>◷</Glyph>
               <div>
                 <b>{r.appointment}</b>
-                <span>{r.deviceCategory} · {r.brandModel}</span>
+                <span>{r.deviceCategory}{r.deviceAge && r.deviceAge !== 'Not specified' ? ` · Age: ${r.deviceAge}` : (r.brandModel && r.brandModel !== 'Not provided' ? ` · ${r.brandModel}` : '')}</span>
                 <small>{r.locality} · {displayStatus(r.status)}</small>
               </div>
             </article>

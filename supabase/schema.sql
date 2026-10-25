@@ -37,7 +37,7 @@ create table public.repair_partner_profiles (
 create table public.devices (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid not null references public.profiles(id) on delete cascade,
-  category text not null check (category in ('Refrigerator', 'Washing machine', 'Laptop', 'Air conditioner', 'Smartphone')),
+  category text not null check (char_length(category) between 2 and 120),
   brand_model text check (char_length(brand_model) <= 160),
   approximate_age text check (char_length(approximate_age) <= 80),
   created_at timestamptz not null default now(),
@@ -50,10 +50,10 @@ create table public.repair_requests (
   customer_name text,
   partner_id uuid references public.profiles(id) on delete set null,
   partner_name text,
-  device_category text not null check (device_category in ('Refrigerator', 'Washing machine', 'Laptop', 'Air conditioner', 'Smartphone')),
+  device_category text not null check (char_length(device_category) between 2 and 120),
   brand_model text,
   device_age text,
-  symptoms text not null check (char_length(symptoms) between 12 and 4000),
+  symptoms text not null check (char_length(symptoms) between 8 and 4000),
   locality text,
   photo_name text,
   diagnosis_json jsonb not null,
@@ -175,8 +175,8 @@ begin
     raise exception 'Only a customer profile can create a repair request';
   end if;
   if coalesce(length(p_request->>'symptoms'), 0) < 12 then raise exception 'More symptom detail is required'; end if;
-  if (p_request->>'deviceCategory') not in ('Refrigerator', 'Washing machine', 'Laptop', 'Air conditioner', 'Smartphone') then
-    raise exception 'Unsupported device category';
+  if coalesce(length(p_request->>'deviceCategory'),0) < 2 then
+    raise exception 'Valid appliance or device name required';
   end if;
   if nullif(p_request->>'partnerId','') is not null then
     partner_uuid := (p_request->>'partnerId')::uuid;

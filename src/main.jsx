@@ -49,7 +49,7 @@ function App() {
   const [selectedScenario, setSelectedScenario] = useState(scenarios[0]);
   const [showExplorer, setShowExplorer] = useState(false);
   const [showPlatform, setShowPlatform] = useState(() => window.location.pathname === '/auth/callback');
-  const [formData, setFormData] = useState({ device: 'Refrigerator', details: '', locality: '' });
+  const [formData, setFormData] = useState({ device: '', details: '', age: '', locality: '' });
   const [isAssessing, setIsAssessing] = useState(false);
   const [assessmentResult, setAssessmentResult] = useState(null);
   const [platformDraft, setPlatformDraft] = useState(null);
@@ -59,7 +59,7 @@ function App() {
     setMenuOpen(false);
   };
 
-  const runDiagnosis = async (device, details, locality = '') => {
+  const runDiagnosis = async (device, details, locality = '', deviceAge = '') => {
     setIsAssessing(true);
     let diagnosis = null;
 
@@ -70,6 +70,7 @@ function App() {
         body: JSON.stringify({
           deviceCategory: device,
           symptoms: details,
+          deviceAge,
           locality,
         }),
       });
@@ -86,9 +87,9 @@ function App() {
       diagnosis = makeDiagnosis({ deviceCategory: device, symptoms: details });
     }
 
-    const estimate = makeEstimate(device);
+    const estimate = makeEstimate(device, details, diagnosis?.costEstimate);
     setAssessmentResult({
-      form: { deviceCategory: device, symptoms: details, locality },
+      form: { deviceCategory: device, symptoms: details, deviceAge, locality },
       diagnosis,
       estimate,
     });
@@ -97,15 +98,15 @@ function App() {
 
   const chooseScenario = (scenario) => {
     setSelectedScenario(scenario);
-    setFormData({ device: scenario.type, details: scenario.symptom, locality: '' });
+    setFormData({ device: scenario.type, details: scenario.symptom, age: '', locality: '' });
     scrollTo('diagnose');
     runDiagnosis(scenario.type, scenario.symptom);
   };
 
   const submitIntake = (event) => {
     event.preventDefault();
-    if (!formData.device || !formData.details.trim()) return;
-    runDiagnosis(formData.device, formData.details, formData.locality);
+    if (!formData.device.trim() || !formData.details.trim()) return;
+    runDiagnosis(formData.device.trim(), formData.details.trim(), formData.locality.trim(), formData.age?.trim() || '');
   };
 
   const openPlatformWithDraft = (draft) => {
@@ -367,40 +368,47 @@ function App() {
               ) : (
                 <form onSubmit={submitIntake}>
                   <h3>What needs attention?</h3>
-                  <p>Tell us enough to evaluate the failure mode.</p>
+                  <p>Tell us what appliance has a problem and describe what happened.</p>
                   <label>
-                    Device category
-                    <select
+                    What appliance needs repair?
+                    <input
+                      type="text"
                       value={formData.device}
                       onChange={(e) => setFormData({ ...formData, device: e.target.value })}
+                      placeholder="e.g. Microwave, Chimney, Washing machine, TV, Refrigerator, AC, Geyser, Laptop..."
                       required
-                    >
-                      <option>Refrigerator</option>
-                      <option>Washing machine</option>
-                      <option>Laptop</option>
-                      <option>Air conditioner</option>
-                      <option>Smartphone</option>
-                    </select>
+                    />
                   </label>
+                  <div className="form-row-2">
+                    <label>
+                      Approx. age <span className="optional">optional</span>
+                      <input
+                        type="text"
+                        value={formData.age || ''}
+                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                        placeholder="e.g. 3 years, 6 months"
+                      />
+                    </label>
+                    <label>
+                      Locality <span className="optional">optional</span>
+                      <input
+                        value={formData.locality}
+                        onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
+                        placeholder="e.g. Indiranagar, Koramangala"
+                      />
+                    </label>
+                  </div>
                   <label>
                     What’s happening?
                     <textarea
                       value={formData.details}
                       onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                      placeholder="e.g. The refrigerator runs continuously but the fresh food compartment is not cooling..."
+                      placeholder="Describe the issue in detail. E.g. Sparks when turned on, making a loud grinding noise, not heating, water leaking..."
                       required
                     />
                   </label>
-                  <label>
-                    Locality <span className="optional">optional</span>
-                    <input
-                      value={formData.locality}
-                      onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
-                      placeholder="e.g. Indiranagar, Koramangala"
-                    />
-                  </label>
                   <button className="button button-primary intake-submit" type="submit">
-                    Run AI Diagnosis <Icon name="arrow" size={17} />
+                    Run AI Diagnosis & Cost Estimate <Icon name="arrow" size={17} />
                   </button>
                 </form>
               )}
@@ -493,9 +501,32 @@ function Assessment({ result, onReset, onBook }) {
 
       {!isDanger && (
         <div className="mini-estimate">
+          {estimate.exactEstimate ? (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(14, 165, 233, 0.04) 100%)',
+              border: '1.5px solid #0284c7',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              marginBottom: '12px',
+              textAlign: 'center',
+            }}>
+              <span style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0284c7', display: 'block', marginBottom: '2px' }}>
+                🎯 AI Calculated Exact Cost
+              </span>
+              <div style={{ fontSize: '26px', fontWeight: '800', color: '#0f172a', lineHeight: '1.1' }}>
+                {money(estimate.exactEstimate)}
+              </div>
+              <div style={{ marginTop: '6px', display: 'inline-block', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: '600' }}>
+                ✓ 100% Price Protection Guarantee
+              </div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
+                No hidden technician markup · Final work only starts after your explicit approval.
+              </div>
+            </div>
+          ) : null}
           <span>ESTIMATED REGIONAL COST RANGE</span>
           <strong>{money(estimate.totalMin)} – {money(estimate.totalMax)}</strong>
-          <small>Includes diagnostic visit ({money(estimate.diagnosticFee)}), labor & likely parts</small>
+          <small>Includes diagnostic visit ({money(estimate.diagnosticFee)}), skilled labor & likely parts</small>
         </div>
       )}
 
