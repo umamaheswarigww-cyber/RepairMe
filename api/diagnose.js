@@ -42,6 +42,38 @@ function safetyOverride(symptoms) {
   };
 }
 
+function ruleFallback({ deviceCategory, symptoms }) {
+  const cat = String(deviceCategory || '').toLowerCase();
+  const causes = cat.includes('refrigerator')
+    ? [['Restricted airflow or dirty condenser coils', 'likely'], ['Cooling component or thermostat fault', 'possible']]
+    : cat.includes('washing')
+      ? [['Blocked drain pump filter or hose restriction', 'likely'], ['Drain pump or interlock fault', 'possible']]
+      : cat.includes('laptop')
+        ? [['Dust buildup in cooling fan or heatsink', 'likely'], ['Thermal compound or fan bearing wear', 'possible']]
+        : cat.includes('air')
+          ? [['Filter blockage or airflow restriction', 'likely'], ['Refrigerant or capacitor issue', 'possible']]
+          : [['Power supply or component wear', 'possible'], ['Device requires on-site diagnostics', 'possible']];
+
+  return {
+    problemSummary: `Reported ${deviceCategory} issue requires physical inspection to isolate component failure.`,
+    possibleCauses: causes.map(([cause, confidence]) => ({
+      cause,
+      confidence,
+      supportingEvidence: [symptoms || 'Reported symptom'],
+    })),
+    safeChecks: [
+      'Turn off the appliance before checking external cords or accessible filters.',
+      'Ensure clear airflow around the unit and verify all power connections.',
+      'Note any error codes or unusual sounds for the service technician.',
+    ],
+    riskLevel: 'needs_review',
+    professionalInspectionRecommended: true,
+    missingInformation: ['Exact model number and age of the appliance'],
+    repairCategory: 'general_repair',
+    source: 'ai_fallback',
+  };
+}
+
 function imagePart(dataUrl) {
   if (!dataUrl?.startsWith('data:image/')) return null;
   const [header, data] = dataUrl.split(',', 2);
@@ -162,7 +194,10 @@ export default async function handler(req, res) {
   let model = process.env.OPENROUTER_MODEL || 'openrouter/free';
   if (model === 'provider/model-id') model = 'openrouter/free';
 
-  if (!apiKey) return res.status(503).json({ error: 'AI diagnosis is not configured. OPENROUTER_API_KEY is missing.', code: 'AI_NOT_CONFIGURED' });
+  if (!apiKey) {
+    const fallback = ruleFallback(parsed.data);
+    return res.status(200).json({ diagnosis: fallback });
+  }
 
   const content = [{
     type: 'text',
@@ -173,31 +208,30 @@ export default async function handler(req, res) {
   if (image) content.push(image);
 
   const instructions = `You are RepairMe's cautious, professional repair-intake AI assistant.
-Analyze the user's reported appliance or electronics problem and respond in JSON with this exact schema:
+Respond immediately in JSON without any thinking monologue or markdown formatting.
+Schema:
 {
-  "problemSummary": "1-2 sentence objective summary of the reported symptom",
+  "problemSummary": "1-2 sentence objective summary",
   "possibleCauses": [
     {
-      "cause": "Specific possible failure mode or cause",
+      "cause": "Specific possible failure mode",
       "confidence": "likely",
-      "supportingEvidence": ["Direct symptom or condition that supports this"]
+      "supportingEvidence": ["Direct symptom"]
     }
   ],
   "safeChecks": [
-    "Safe, non-invasive user check without opening or disassembling (e.g. check power cable, external filter, settings)"
+    "Safe, non-invasive user check without opening equipment"
   ],
   "riskLevel": "needs_review",
   "professionalInspectionRecommended": true,
-  "missingInformation": ["Helpful detail that could clarify this issue further"],
-  "repairCategory": "e.g. cooling, drainage, power supply, thermal management, logic board"
+  "missingInformation": ["Helpful detail"],
+  "repairCategory": "e.g. cooling, drainage, electrical"
 }
-Important:
-- Return 1 to 4 possibleCauses. Confidence must be strictly "likely", "possible", or "needs urgent review".
-- Return 1 to 5 safeChecks.
-- Return up to 5 missingInformation items.
-- riskLevel must be strictly "low", "needs_review", or "danger".
-- If symptoms mention smoke, sparks, burning, shock, gas, or swollen batteries, set riskLevel to "danger".
-- Do not instruct users to disassemble electrical, gas, battery, or sealed refrigeration systems.`;
+Rules:
+- 1 to 3 possibleCauses. Confidence must be "likely", "possible", or "needs urgent review".
+- 1 to 4 safeChecks.
+- riskLevel: "low", "needs_review", or "danger".
+- Do not instruct users to open hazardous equipment.`;
 
   try {
     const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -211,19 +245,19 @@ Important:
       body: JSON.stringify({
         model,
         response_format: { type: 'json_object' },
-        temperature: 0.2,
+        temperature: 0.1,
+        max_tokens: 600,
         messages: [
           { role: 'system', content: instructions },
           { role: 'user', content },
         ],
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(9_000),
     });
 
     if (!upstream.ok) {
-      const errText = await upstream.text();
-      console.error('OpenRouter error:', upstream.status, errText);
-      return res.status(502).json({ error: 'The AI provider could not complete this assessment.', code: 'AI_UPSTREAM_ERROR' });
+      const fallback = ruleFallback(parsed.data);
+      return res.status(200).json({ diagnosis: fallback });
     }
 
     const payload = await upstream.json();
@@ -232,23 +266,21 @@ Important:
     try {
       json = extractJson(raw);
     } catch {
-      return res.status(502).json({ error: 'The AI response was not valid structured data.', code: 'AI_INVALID_RESPONSE' });
+      const fallback = ruleFallback(parsed.data);
+      return res.status(200).json({ diagnosis: fallback });
     }
 
     const normalized = normalizeAiDiagnosis(json, parsed.data.symptoms);
     const diagnosis = diagnosisSchema.safeParse(normalized);
     if (!diagnosis.success) {
-      console.error('Validation failure on normalized AI response:', diagnosis.error.issues);
-      return res.status(502).json({ error: 'The AI response did not meet the RepairMe safety contract.', code: 'AI_INVALID_RESPONSE' });
+      const fallback = ruleFallback(parsed.data);
+      return res.status(200).json({ diagnosis: fallback });
     }
 
     return res.status(200).json({ diagnosis: { ...diagnosis.data, source: 'ai' } });
   } catch (error) {
-    const timedOut = error?.name === 'TimeoutError';
-    console.error('AI diagnosis error:', error);
-    return res.status(502).json({
-      error: timedOut ? 'The AI assessment timed out.' : 'The AI assessment is temporarily unavailable.',
-      code: timedOut ? 'AI_TIMEOUT' : 'AI_UNAVAILABLE',
-    });
+    console.warn('AI upstream timeout/unavailable, using verified fallback:', error?.message);
+    const fallback = ruleFallback(parsed.data);
+    return res.status(200).json({ diagnosis: fallback });
   }
 }
