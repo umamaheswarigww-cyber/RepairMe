@@ -47,58 +47,59 @@ export function getPricingForAppliance(category = '', symptoms = '') {
   const key = `${category} ${symptoms}`.toLowerCase();
 
   if (key.includes('refrigerat') || key.includes('fridge') || key.includes('freezer')) {
-    return { visit: 350, labor: [500, 1100], parts: [350, 2200], name: 'Refrigerator / Freezer' };
+    return { visit: 149, labor: [450, 950], parts: [350, 2200], name: 'Refrigerator / Freezer' };
   }
   if (key.includes('washing') || key.includes('washer') || key.includes('dryer') || key.includes('laundry')) {
-    return { visit: 300, labor: [450, 1000], parts: [250, 1800], name: 'Washing Machine' };
+    return { visit: 149, labor: [400, 850], parts: [250, 1800], name: 'Washing Machine' };
   }
   if (key.includes('air conditioner') || key.includes('ac') || key.includes('hvac') || key.includes('split ac') || key.includes('cooler')) {
-    return { visit: 400, labor: [650, 1500], parts: [400, 3200], name: 'Air Conditioner' };
+    return { visit: 149, labor: [550, 1200], parts: [400, 3200], name: 'Air Conditioner' };
   }
   if (key.includes('microwave') || key.includes('oven') || key.includes('otg') || key.includes('air fryer') || key.includes('toaster')) {
-    return { visit: 300, labor: [400, 850], parts: [300, 1600], name: 'Microwave / Oven' };
+    return { visit: 99, labor: [350, 750], parts: [300, 1600], name: 'Microwave / Oven' };
   }
   if (key.includes('chimney') || key.includes('exhaust') || key.includes('hob') || key.includes('stove')) {
-    return { visit: 350, labor: [450, 950], parts: [300, 1800], name: 'Kitchen Chimney / Hob' };
+    return { visit: 149, labor: [400, 850], parts: [300, 1800], name: 'Kitchen Chimney / Hob' };
   }
   if (key.includes('tv') || key.includes('television') || key.includes('monitor') || key.includes('display') || key.includes('screen')) {
-    return { visit: 350, labor: [500, 1200], parts: [400, 3500], name: 'Television / Display' };
+    return { visit: 149, labor: [450, 950], parts: [400, 3500], name: 'Television / Display' };
   }
   if (key.includes('water purifier') || key.includes('ro') || key.includes('uv filter') || key.includes('filter')) {
-    return { visit: 250, labor: [350, 750], parts: [350, 2100], name: 'Water Purifier (RO)' };
+    return { visit: 99, labor: [300, 650], parts: [350, 2100], name: 'Water Purifier (RO)' };
   }
   if (key.includes('geyser') || key.includes('water heater') || key.includes('immersion')) {
-    return { visit: 300, labor: [400, 850], parts: [300, 1800], name: 'Geyser / Water Heater' };
+    return { visit: 99, labor: [350, 750], parts: [300, 1800], name: 'Geyser / Water Heater' };
   }
   if (key.includes('laptop') || key.includes('computer') || key.includes('pc') || key.includes('macbook') || key.includes('desktop')) {
-    return { visit: 400, labor: [500, 1400], parts: [350, 2800], name: 'Laptop / Computer' };
+    return { visit: 149, labor: [450, 1100], parts: [350, 2800], name: 'Laptop / Computer' };
   }
   if (key.includes('phone') || key.includes('smartphone') || key.includes('mobile') || key.includes('tablet') || key.includes('ipad')) {
-    return { visit: 250, labor: [350, 900], parts: [350, 4500], name: 'Mobile / Tablet' };
+    return { visit: 99, labor: [300, 750], parts: [350, 4500], name: 'Mobile / Tablet' };
   }
   if (key.includes('induction') || key.includes('cooktop')) {
-    return { visit: 250, labor: [350, 700], parts: [200, 1100], name: 'Induction Cooktop' };
+    return { visit: 99, labor: [250, 600], parts: [200, 1100], name: 'Induction Cooktop' };
   }
   if (key.includes('fan') || key.includes('vacuum') || key.includes('iron') || key.includes('mixer') || key.includes('grinder') || key.includes('blender')) {
-    return { visit: 250, labor: [300, 650], parts: [200, 1200], name: 'Small Home Appliance' };
+    return { visit: 99, labor: [250, 550], parts: [200, 1200], name: 'Small Home Appliance' };
   }
   if (key.includes('sound') || key.includes('speaker') || key.includes('audio') || key.includes('amplifier') || key.includes('theater')) {
-    return { visit: 300, labor: [400, 900], parts: [300, 1800], name: 'Audio / Sound Equipment' };
+    return { visit: 99, labor: [350, 800], parts: [300, 1800], name: 'Audio / Sound Equipment' };
   }
 
   // General Domestic / Office Appliance Default
-  return { visit: 300, labor: [400, 950], parts: [300, 1900], name: category || 'Appliance' };
+  return { visit: 99, labor: [350, 800], parts: [300, 1800], name: category || 'Appliance' };
 }
 
 export const repairPartners = [
   {
     id: 'partner-anu',
     name: 'Anu Nair',
+    phone: '+91 98450 21984',
     business: 'Northline Home Care',
     locality: 'Indiranagar',
     distance: '1.8 km',
     years: 8,
-    visitFee: 350,
+    visitFee: 149,
     categories: ['All home appliances', 'Refrigerator', 'Washing machine', 'Air conditioner', 'Microwave', 'Kitchen Chimney'],
     slots: ['Tomorrow · 10:00–12:00', 'Tomorrow · 14:00–16:00'],
     intro: 'Comprehensive appliance repair with clear inspections, transparent estimates, and itemized quotes.',
@@ -106,11 +107,12 @@ export const repairPartners = [
   {
     id: 'partner-dev',
     name: 'Dev Shah',
+    phone: '+91 98861 44520',
     business: 'Circuit & Coil',
     locality: 'Koramangala',
     distance: '3.1 km',
     years: 6,
-    visitFee: 350,
+    visitFee: 149,
     categories: ['All electronics & appliances', 'Laptop', 'TV', 'Smartphone', 'Microwave', 'Air conditioner'],
     slots: ['Tomorrow · 11:00–13:00', 'Friday · 10:00–12:00'],
     intro: 'Electronics and household appliances specialist with itemized quotes before work begins.',
@@ -118,11 +120,12 @@ export const repairPartners = [
   {
     id: 'partner-ima',
     name: 'Imran Khan',
+    phone: '+91 99002 88314',
     business: 'CareFix Appliances',
     locality: 'Domlur',
     distance: '4.0 km',
     years: 11,
-    visitFee: 300,
+    visitFee: 99,
     categories: ['All domestic appliances', 'Kitchen Chimney', 'Water Purifier', 'Geyser', 'Washing machine'],
     slots: ['Today · 17:00–19:00', 'Saturday · 09:00–11:00'],
     intro: 'Fast, verified servicing across all kitchen and domestic home appliances.',
@@ -254,6 +257,7 @@ export function newRequest(form, user, diagnosis, estimate, partner, slot) {
     id,
     customerId: user.id,
     customerName: user.name,
+    customerPhone: user.phone || form.customerPhone || null,
     deviceCategory: form.deviceCategory,
     deviceAge: form.deviceAge || 'Not specified',
     symptoms: form.symptoms,
@@ -263,6 +267,7 @@ export function newRequest(form, user, diagnosis, estimate, partner, slot) {
     estimate,
     partnerId: partner?.id || null,
     partnerName: partner?.name || null,
+    partnerPhone: partner?.phone || '+91 98450 21984',
     appointment: slot || null,
     status: 'REQUESTED',
     quote: null,

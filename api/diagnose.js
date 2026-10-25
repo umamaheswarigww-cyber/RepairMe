@@ -59,43 +59,43 @@ function calculateAppliancePricing(deviceCategory = '', symptoms = '') {
   const key = `${deviceCategory} ${symptoms}`.toLowerCase();
 
   if (key.includes('refrigerat') || key.includes('fridge') || key.includes('freezer')) {
-    return { visit: 350, labor: [500, 1100], parts: [350, 2200], name: 'Refrigerator / Cooling' };
+    return { visit: 149, labor: [450, 950], parts: [350, 2200], name: 'Refrigerator / Cooling' };
   }
   if (key.includes('washing') || key.includes('washer') || key.includes('dryer')) {
-    return { visit: 300, labor: [450, 1000], parts: [250, 1800], name: 'Washing Machine' };
+    return { visit: 149, labor: [400, 850], parts: [250, 1800], name: 'Washing Machine' };
   }
   if (key.includes('air conditioner') || key.includes('ac') || key.includes('hvac') || key.includes('cooler')) {
-    return { visit: 400, labor: [650, 1500], parts: [400, 3200], name: 'Air Conditioning' };
+    return { visit: 149, labor: [550, 1200], parts: [400, 3200], name: 'Air Conditioning' };
   }
   if (key.includes('microwave') || key.includes('oven') || key.includes('otg') || key.includes('air fryer')) {
-    return { visit: 300, labor: [400, 850], parts: [300, 1600], name: 'Microwave / Heating' };
+    return { visit: 99, labor: [350, 750], parts: [300, 1600], name: 'Microwave / Heating' };
   }
   if (key.includes('chimney') || key.includes('exhaust') || key.includes('hob')) {
-    return { visit: 350, labor: [450, 950], parts: [300, 1800], name: 'Kitchen Chimney / Ventilation' };
+    return { visit: 149, labor: [400, 850], parts: [300, 1800], name: 'Kitchen Chimney / Ventilation' };
   }
   if (key.includes('tv') || key.includes('television') || key.includes('display')) {
-    return { visit: 350, labor: [500, 1200], parts: [400, 3500], name: 'Television / Display' };
+    return { visit: 149, labor: [450, 950], parts: [400, 3500], name: 'Television / Display' };
   }
   if (key.includes('water purifier') || key.includes('ro') || key.includes('filter')) {
-    return { visit: 250, labor: [350, 750], parts: [350, 2100], name: 'Water Purifier (RO)' };
+    return { visit: 99, labor: [300, 650], parts: [350, 2100], name: 'Water Purifier (RO)' };
   }
   if (key.includes('geyser') || key.includes('water heater')) {
-    return { visit: 300, labor: [400, 850], parts: [300, 1800], name: 'Geyser / Water Heater' };
+    return { visit: 99, labor: [350, 750], parts: [300, 1800], name: 'Geyser / Water Heater' };
   }
   if (key.includes('laptop') || key.includes('computer') || key.includes('pc') || key.includes('macbook')) {
-    return { visit: 400, labor: [500, 1400], parts: [350, 2800], name: 'Computer / Laptop' };
+    return { visit: 149, labor: [450, 1100], parts: [350, 2800], name: 'Computer / Laptop' };
   }
   if (key.includes('phone') || key.includes('mobile') || key.includes('tablet')) {
-    return { visit: 250, labor: [350, 900], parts: [350, 4500], name: 'Mobile / Tablet' };
+    return { visit: 99, labor: [300, 750], parts: [350, 4500], name: 'Mobile / Tablet' };
   }
   if (key.includes('induction') || key.includes('cooktop')) {
-    return { visit: 250, labor: [350, 700], parts: [200, 1100], name: 'Induction Cooktop' };
+    return { visit: 99, labor: [250, 600], parts: [200, 1100], name: 'Induction Cooktop' };
   }
   if (key.includes('fan') || key.includes('vacuum') || key.includes('mixer') || key.includes('grinder')) {
-    return { visit: 250, labor: [300, 650], parts: [200, 1200], name: 'Small Home Appliance' };
+    return { visit: 99, labor: [250, 550], parts: [200, 1200], name: 'Small Home Appliance' };
   }
 
-  return { visit: 300, labor: [400, 950], parts: [300, 1900], name: deviceCategory || 'Appliance' };
+  return { visit: 99, labor: [350, 800], parts: [300, 1800], name: deviceCategory || 'Appliance' };
 }
 
 function ruleFallback({ deviceCategory, symptoms }) {
@@ -253,8 +253,8 @@ function normalizeAiDiagnosis(json, fallbackSymptom = '', deviceCategory = '') {
     let partMax = Number(rawCost.partsMax) || defaultPricing.parts[1];
 
     // Sanitize in case model returned tiny USD numbers
-    if (diag < 100) diag = defaultPricing.visit;
-    if (labMin < 150) labMin = defaultPricing.labor[0];
+    if (diag < 50) diag = defaultPricing.visit;
+    if (labMin < 100) labMin = defaultPricing.labor[0];
     if (labMax < labMin) labMax = Math.round(labMin * 1.5);
     if (partMax < partMin) partMax = Math.round(partMin * 1.8);
 
@@ -338,16 +338,16 @@ Respond in valid JSON only with this exact schema:
   ],
   "safeChecks": [ "Safe, non-invasive user check without opening equipment" ],
   "costEstimate": {
-    "diagnosticFee": 300,
-    "laborMin": 450,
-    "laborMax": 850,
-    "partsMin": 350,
+    "diagnosticFee": 99,
+    "laborMin": 350,
+    "laborMax": 750,
+    "partsMin": 300,
     "partsMax": 1500,
-    "totalMin": 1100,
-    "totalMax": 2650,
-    "exactEstimate": 1500,
+    "totalMin": 749,
+    "totalMax": 2349,
+    "exactEstimate": 1200,
     "priceConfidence": "High confidence for standard component replacement",
-    "explanation": "Cost includes diagnostic visit, labor, and anticipated replacement part."
+    "explanation": "Cost includes low diagnostic visit fee (₹99), skilled labor, and anticipated replacement part."
   },
   "riskLevel": "needs_review",
   "professionalInspectionRecommended": true,
@@ -356,7 +356,7 @@ Respond in valid JSON only with this exact schema:
 }
 Rules:
 - All prices must be integer Indian Rupees (INR ₹) reflecting realistic service rates in India.
-- Diagnostic visit fee is typically ₹250 to ₹450.
+- Keep diagnostic visit fee very low and customer-friendly: typically ₹99 to ₹149.
 - If symptoms mention fire, smoke, sparks, burning smells, or gas leaks, set riskLevel to "danger".
 - Do not instruct users to open hazardous equipment.`;
 

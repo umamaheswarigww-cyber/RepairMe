@@ -12,6 +12,7 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   role public.repair_role not null,
   display_name text not null check (char_length(display_name) between 1 and 120),
+  phone text check (char_length(phone) <= 30),
   verification_status public.partner_verification,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -21,6 +22,7 @@ create table public.profiles (
 create table public.repair_partner_profiles (
   id uuid primary key references public.profiles(id) on delete cascade,
   business_name text check (char_length(business_name) <= 160),
+  phone text check (char_length(phone) <= 30),
   introduction text check (char_length(introduction) <= 1000),
   service_locality text check (char_length(service_locality) <= 160),
   experience_years smallint check (experience_years >= 0 and experience_years <= 80),
@@ -48,8 +50,10 @@ create table public.repair_requests (
   id text primary key,
   customer_id uuid not null references public.profiles(id) on delete restrict,
   customer_name text,
+  customer_phone text,
   partner_id uuid references public.profiles(id) on delete set null,
   partner_name text,
+  partner_phone text,
   device_category text not null check (char_length(device_category) between 2 and 120),
   brand_model text,
   device_age text,
@@ -142,9 +146,9 @@ create policy "partner_profile_directory" on public.repair_partner_profiles for 
   exists (select 1 from public.profiles p where p.id = repair_partner_profiles.id and p.verification_status = 'approved')
 );
 
--- A deliberately narrow public directory for authenticated customers. It does not expose private contact preferences.
+-- A public directory view for authenticated customers. Exposes verified technician credentials & phone for post-booking direct contact.
 create view public.repair_partner_directory as
-select p.id, p.display_name, rp.business_name, rp.introduction, rp.service_locality,
+select p.id, p.display_name, coalesce(rp.phone, p.phone) as phone, rp.business_name, rp.introduction, rp.service_locality,
   rp.experience_years, rp.categories, rp.brands, rp.available_slots
 from public.profiles p
 join public.repair_partner_profiles rp on rp.id = p.id
@@ -169,6 +173,7 @@ declare
   request_row public.repair_requests;
   partner_uuid uuid;
   partner_display text;
+  partner_phone_num text;
   selected_slot text;
 begin
   if not exists (select 1 from public.profiles where id = auth.uid() and role = 'customer') then
@@ -180,7 +185,10 @@ begin
   end if;
   if nullif(p_request->>'partnerId','') is not null then
     partner_uuid := (p_request->>'partnerId')::uuid;
-    select display_name into partner_display from public.profiles where id = partner_uuid and role = 'repair_partner' and verification_status = 'approved';
+    select p.display_name, coalesce(rp.phone, p.phone) into partner_display, partner_phone_num
+    from public.profiles p
+    left join public.repair_partner_profiles rp on rp.id = p.id
+    where p.id = partner_uuid and p.role = 'repair_partner' and p.verification_status = 'approved';
     if partner_display is null then
       raise exception 'Selected Repair Partner is not available';
     end if;
@@ -188,10 +196,11 @@ begin
   selected_slot := nullif(left(coalesce(p_request->>'appointment',''),160),'');
   if partner_uuid is null and selected_slot is not null then raise exception 'An appointment needs a selected Repair Partner'; end if;
 
-  insert into public.repair_requests(id, customer_id, customer_name, partner_id, partner_name, device_category, brand_model, device_age, symptoms, locality, photo_name, diagnosis_json, estimate_json, appointment_slot, status)
+  insert into public.repair_requests(id, customer_id, customer_name, customer_phone, partner_id, partner_name, partner_phone, device_category, brand_model, device_age, symptoms, locality, photo_name, diagnosis_json, estimate_json, appointment_slot, status)
   values (
     left(coalesce(nullif(p_request->>'id',''), encode(gen_random_bytes(12), 'hex')), 80), auth.uid(), left(coalesce(p_request->>'customerName','Customer'),120),
-    partner_uuid, partner_display, p_request->>'deviceCategory', left(coalesce(p_request->>'brandModel',''),160),
+    left(coalesce(p_request->>'customerPhone',''),40),
+    partner_uuid, partner_display, coalesce(partner_phone_num, p_request->>'partnerPhone'), p_request->>'deviceCategory', left(coalesce(p_request->>'brandModel',''),160),
     left(coalesce(p_request->>'deviceAge',''),80), p_request->>'symptoms', left(coalesce(p_request->>'locality',''),160), left(coalesce(p_request->>'photoName',''),220),
     coalesce(p_request->'diagnosis','{}'::jsonb), coalesce(p_request->'estimate','{}'::jsonb), selected_slot, 'REQUESTED'
   ) returning * into request_row;

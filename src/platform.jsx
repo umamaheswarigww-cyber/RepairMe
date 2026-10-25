@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle, Bell, BriefcaseBusiness, CalendarClock, CheckCircle2, Circle, ClipboardList, History, Inbox, IndianRupee, LayoutDashboard, Laptop, LogOut, Menu, Settings as SettingsIcon, Sparkles, Upload, Wrench } from 'lucide-react';
+import { AlertTriangle, Bell, BriefcaseBusiness, CalendarClock, CheckCircle2, Circle, ClipboardList, History, Inbox, IndianRupee, LayoutDashboard, Laptop, LogOut, Menu, Phone, Settings as SettingsIcon, Sparkles, Upload, Wrench } from 'lucide-react';
 import { isSupabaseConfigured, supabase, getOrCreateProfile } from './lib/supabase';
 import { STATUS_LABELS, repairPartners, makeDiagnosis, makeEstimate, money, canTransition, newRequest, isoNow } from './lib/domain';
 import './platform.css';
@@ -13,6 +13,7 @@ const initialStore = () => ({
   requests: [],
   partnerProfile: {
     businessName: 'Northline Home Care',
+    phone: '+91 98450 21984',
     intro: 'Transparent appliance diagnostics and repair with clear itemized quotes before work begins.',
     locality: 'Indiranagar',
     experience: '8',
@@ -154,13 +155,15 @@ export function Platform({ onExit, initialDraft = null }) {
     };
   }, [selectedRole, initialDraft]);
 
-  function enterAsGuest(role, customName = null) {
+  function enterAsGuest(role, customName = null, customPhone = null) {
+    const isPartner = role === 'repair_partner';
     const guestUser = {
       id: `usr_${Date.now()}`,
-      name: customName || (role === 'repair_partner' ? 'Service Partner' : 'Appliance Owner'),
+      name: customName || (isPartner ? 'Service Partner' : 'Appliance Owner'),
       email: customName ? `${customName.toLowerCase().replace(/\s+/g, '')}@repairme.io` : 'guest@repairme.io',
       role,
-      verificationStatus: role === 'repair_partner' ? 'pending' : null,
+      phone: customPhone || (isPartner ? '+91 98450 21984' : '+91 98765 43210'),
+      verificationStatus: isPartner ? 'approved' : null,
       guest: true,
     };
     setUser(guestUser);
@@ -169,9 +172,9 @@ export function Platform({ onExit, initialDraft = null }) {
     setActive(initialDraft ? 'partners' : 'overview');
   }
 
-  async function handleEmailAuth({ mode, email, password, name }) {
+  async function handleEmailAuth({ mode, email, password, name, phone, locality }) {
     if (!supabase) {
-      enterAsGuest(selectedRole, name || email.split('@')[0]);
+      enterAsGuest(selectedRole, name || email.split('@')[0], phone);
       return;
     }
 
@@ -185,20 +188,36 @@ export function Platform({ onExit, initialDraft = null }) {
             data: {
               full_name: name || email.split('@')[0],
               role: selectedRole,
+              phone: phone || '',
+              locality: locality || '',
             },
           },
         });
         if (error) throw error;
         if (data?.user) {
-          const profile = await getOrCreateProfile(data.user, selectedRole);
-          setUser({
+          const profile = await getOrCreateProfile(data.user, selectedRole, { name, phone });
+          const userObj = {
             id: data.user.id,
             name: profile.display_name || name || email.split('@')[0],
             email: data.user.email,
+            phone: phone || profile.phone || '',
             role: profile.role,
             verificationStatus: profile.verification_status,
             guest: false,
-          });
+          };
+          setUser(userObj);
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(userObj));
+          if (selectedRole === 'repair_partner' && phone) {
+            setStore((st) => ({
+              ...st,
+              partnerProfile: {
+                ...st.partnerProfile,
+                businessName: name ? `${name}'s Appliance Care` : st.partnerProfile.businessName,
+                locality: locality || st.partnerProfile.locality,
+                phone,
+              },
+            }));
+          }
           setScreen('workspace');
           setActive(initialDraft ? 'partners' : 'overview');
           setNotice({ kind: 'info', text: 'Account created successfully.' });
@@ -208,14 +227,17 @@ export function Platform({ onExit, initialDraft = null }) {
         if (error) throw error;
         if (data?.user) {
           const profile = await getOrCreateProfile(data.user, selectedRole);
-          setUser({
+          const userObj = {
             id: data.user.id,
             name: profile.display_name || email.split('@')[0],
             email: data.user.email,
+            phone: profile.phone || data.user.user_metadata?.phone || '',
             role: profile.role,
             verificationStatus: profile.verification_status,
             guest: false,
-          });
+          };
+          setUser(userObj);
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(userObj));
           setScreen('workspace');
           setActive(initialDraft ? 'partners' : 'overview');
         }
@@ -359,12 +381,14 @@ function SignIn({ role, onBack, onEmailAuth, onGoogle, onGuest, hasDraft, busy }
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [locality, setLocality] = useState('');
   const roleName = role === 'repair_partner' ? 'Repair Partner' : 'Customer';
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!email || !password) return;
-    onEmailAuth({ mode, email, password, name });
+    onEmailAuth({ mode, email, password, name, phone, locality });
   };
 
   return (
@@ -404,16 +428,39 @@ function SignIn({ role, onBack, onEmailAuth, onGoogle, onGuest, hasDraft, busy }
 
           <form className="auth-form" onSubmit={handleSubmit}>
             {mode === 'signup' && (
-              <label>
-                Full Name
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ramesh Kumar"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
+              <>
+                <label>
+                  Full Name
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Kumar"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Direct Phone Number <small style={{ color: '#0d9488' }}>{role === 'repair_partner' ? '(Customers will call you on this after booking)' : '(For technician call & updates)'}</small>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="e.g. +91 98450 12345"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </label>
+                {role === 'repair_partner' && (
+                  <label>
+                    Service Locality / City
+                    <input
+                      type="text"
+                      placeholder="e.g. Indiranagar, Bangalore"
+                      value={locality}
+                      onChange={(e) => setLocality(e.target.value)}
+                    />
+                  </label>
+                )}
+              </>
             )}
             <label>
               Email address
@@ -598,6 +645,7 @@ function databaseRequest(row) {
     id: row.id,
     customerId: row.customer_id,
     customerName: row.customer_name || 'Customer',
+    customerPhone: row.customer_phone || null,
     deviceCategory: row.device_category,
     brandModel: row.brand_model || null,
     deviceAge: row.device_age || null,
@@ -608,6 +656,7 @@ function databaseRequest(row) {
     estimate: row.estimate_json || makeEstimate(row.device_category, row.symptoms),
     partnerId: row.partner_id,
     partnerName: row.partner_name,
+    partnerPhone: row.partner_phone || '+91 98450 21984',
     appointment: row.appointment_slot,
     status: row.status,
     quote: quote ? { labor: quote.labor_amount, parts: quote.parts_amount, visit: quote.visit_fee, total: quote.total_amount, note: quote.note } : null,
@@ -661,7 +710,7 @@ function CustomerView({ active, user, requests, updateRequest, addRequest, setAc
             return;
           }
           addRequest(newRequest(draft.form, user, draft.diagnosis, draft.estimate, partner, slot));
-          notify({ kind: 'info', text: 'Booking request confirmed. Your technician has been notified.' });
+          notify({ kind: 'info', text: `Booking confirmed with ${partner.name}! You can call them directly at ${partner.phone || '+91 98450 21984'} to discuss the issue & price.` });
           setActive('requests');
         }}
       />
@@ -1055,10 +1104,11 @@ function PartnerFinder({ user, draft, onBooked }) {
         id: p.id,
         name: p.display_name,
         business: p.business_name || p.display_name,
+        phone: p.phone || '+91 98450 21984',
         locality: p.service_locality || 'Regional area',
         distance: 'Nearby',
         years: p.experience_years || 6,
-        visitFee: 350,
+        visitFee: p.visit_fee || 99,
         categories: p.categories?.length ? p.categories : ['Refrigerator', 'Washing machine', 'Air conditioner', 'Microwave', 'Chimney', 'TV', 'Laptop', 'Smartphone', 'All appliances'],
         brands: p.brands || ['LG', 'Samsung', 'Whirlpool'],
         slots: p.available_slots?.length ? p.available_slots : ['Tomorrow · 10:00–12:00', 'Tomorrow · 14:00–16:00'],
@@ -1109,6 +1159,7 @@ function PartnerFinder({ user, draft, onBooked }) {
               <span>⌖ {partner.locality} · {partner.distance}</span>
               <span>◷ {partner.years} years verified experience</span>
               <span>₹ {money(partner.visitFee)} diagnostic visit</span>
+              <span style={{ color: '#15803d', fontWeight: 600 }}>📞 Direct phone call unlocked after booking</span>
             </div>
 
             {chosen?.id === partner.id ? (
@@ -1221,6 +1272,32 @@ function RequestDetail({ request, role, updateRequest, notify }) {
           ))}
         </div>
       </div>
+
+      {request.partnerName && (
+        <div className="technician-call-box">
+          <div className="tech-call-header">
+            <span className="tech-badge"><Phone size={13} /> ASSIGNED TECHNICIAN DIRECT LINE</span>
+            <h4>{request.partnerName}</h4>
+            <p>You can call your technician directly to describe the exact issue, check component availability, or ask about preliminary repair pricing before their visit.</p>
+          </div>
+          <a href={`tel:${request.partnerPhone || '+91 98450 21984'}`} className="call-tech-btn">
+            <Phone size={16} /> Call {request.partnerPhone || '+91 98450 21984'}
+          </a>
+        </div>
+      )}
+
+      {role === 'repair_partner' && request.customerPhone && (
+        <div className="technician-call-box" style={{ background: '#f8fafc', borderColor: '#94a3b8' }}>
+          <div className="tech-call-header">
+            <span className="tech-badge" style={{ color: '#475569' }}><Phone size={13} /> CUSTOMER CONTACT</span>
+            <h4>{request.customerName}</h4>
+            <p>Customer contact for arrival coordination or pre-inspection questions.</p>
+          </div>
+          <a href={`tel:${request.customerPhone}`} className="call-tech-btn" style={{ background: '#475569' }}>
+            <Phone size={16} /> Call Customer: {request.customerPhone}
+          </a>
+        </div>
+      )}
 
       {request.quote && (
         <div className="quote-review">
@@ -1360,6 +1437,24 @@ function RequestSummary({ request }) {
         <b>{request.deviceCategory}{request.deviceAge && request.deviceAge !== 'Not specified' ? ` · Age: ${request.deviceAge}` : (request.brandModel && request.brandModel !== 'Not provided' ? ` · ${request.brandModel}` : '')}</b>
         <p>{request.symptoms}</p>
         <Status status={request.status} />
+        {request.partnerName && (
+          <div style={{ marginTop: '8px' }}>
+            <a
+              href={`tel:${request.partnerPhone || '+91 98450 21984'}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                color: '#15803d',
+                fontWeight: '700',
+                fontSize: '11.5px',
+                textDecoration: 'none',
+              }}
+            >
+              <Phone size={12} /> Call {request.partnerName}: {request.partnerPhone || '+91 98450 21984'}
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1547,17 +1642,26 @@ function PartnerProfile({ user, profile, setStore, notify }) {
         </div>
         <div className="form-two">
           <label>
+            Direct contact phone number (Customers will call you after booking)
+            <input
+              type="tel"
+              value={data.phone || ''}
+              placeholder="e.g. +91 98450 12345"
+              onChange={(e) => setData({ ...data, phone: e.target.value })}
+            />
+          </label>
+          <label>
             Years of experience
             <input type="number" min="0" value={data.experience || ''} onChange={(e) => setData({ ...data, experience: e.target.value })} />
           </label>
-          <label>
-            Repair categories
-            <input
-              value={(data.categories || []).join(', ')}
-              onChange={(e) => setData({ ...data, categories: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
-            />
-          </label>
         </div>
+        <label>
+          Repair categories
+          <input
+            value={(data.categories || []).join(', ')}
+            onChange={(e) => setData({ ...data, categories: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+          />
+        </label>
         <label>
           Professional introduction
           <textarea value={data.intro || ''} onChange={(e) => setData({ ...data, intro: e.target.value })} />
@@ -1607,6 +1711,17 @@ function Appointments({ requests }) {
                 <b>{r.appointment}</b>
                 <span>{r.deviceCategory}{r.deviceAge && r.deviceAge !== 'Not specified' ? ` · Age: ${r.deviceAge}` : (r.brandModel && r.brandModel !== 'Not provided' ? ` · ${r.brandModel}` : '')}</span>
                 <small>{r.locality} · {displayStatus(r.status)}</small>
+                {r.partnerName && (
+                  <div style={{ marginTop: '8px' }}>
+                    <a
+                      href={`tel:${r.partnerPhone || '+91 98450 21984'}`}
+                      className="call-tech-btn"
+                      style={{ padding: '6px 12px', fontSize: '11.5px' }}
+                    >
+                      <Phone size={13} /> Call {r.partnerName}: {r.partnerPhone || '+91 98450 21984'}
+                    </a>
+                  </div>
+                )}
               </div>
             </article>
           ))}
